@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="chart-desk">
+<meta name="theme-color" content="#f6f5f1">
+<title>chart-desk</title>
+<style>
+  @font-face {
+    font-family: 'DeskMono';
+    src: local('JetBrains Mono'), local('Menlo'), local('Consolas');
+  }
+
+  :root{
+    --void:#f6f5f1;
+    --panel:#ffffff;
+    --panel-2:#efeee8;
+    --line:#dedcd2;
+    --line-bright:#c3c0b2;
+    --amber:#c2670a;
+    --amber-dim:#8f4d08;
+    --text:#1c1b18;
+    --text-dim:#6b6a62;
+    --text-dimmer:#9a988c;
+    --buy:#0a8a4a;
+    --buy-dim:#bfe6d1;
+    --sell:#c2291d;
+    --sell-dim:#f3c9c4;
+    --hold:#6b6a62;
+  }
+
+  body[data-theme="amber-dark"]{
+    --void:#0a0a0a;
+    --panel:#131313;
+    --panel-2:#181818;
+    --line:#252525;
+    --line-bright:#3a3a3a;
+    --amber:#ff9f0a;
+    --amber-dim:#a86a10;
+    --text:#e8e6e1;
+    --text-dim:#6f6f6f;
+    --text-dimmer:#4a4a4a;
+    --buy:#00d964;
+    --buy-dim:#0a4a29;
+    --sell:#ff3b30;
+    --sell-dim:#4a1410;
+    --hold:#8a8a8a;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+
+  body{
+    background:var(--void);
+    color:var(--text);
+    font-family:'JetBrains Mono','SF Mono',Consolas,monospace;
+    font-size:13px;
+    line-height:1.5;
+    min-height:100vh;
+    padding:0;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .scanlines{
+    position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 2px);
+    opacity:0;
+  }
+  body[data-theme="amber-dark"] .scanlines, body[data-theme="green"] .scanlines{
+    opacity:0.4;
+  }
+
+  .wrap{
+    max-width:720px;
+    margin:0 auto;
+    padding:28px 16px 80px;
+  }
+
+  /* ---- header / prompt bar ---- */
+  header{
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;
+    margin-bottom:20px;
+  }
+  .prompt-line{
+    color:var(--amber);
+    font-size:12px;
+    letter-spacing:0.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .prompt-line .path{color:var(--text-dim);}
+  .cursor{
+    display:inline-block; width:7px; height:14px; background:var(--amber);
+    animation:blink 1.1s step-end infinite; vertical-align:-2px;
+  }
+  @keyframes blink{ 50%{opacity:0;} }
+  h1{
+    font-size:20px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    margin-top:6px;
+    color:var(--text);
+  }
+  h1 span{color:var(--amber);}
+  .subtitle{color:var(--text-dim); font-size:12px; margin-top:4px;}
+
+  /* ---- stats strip ---- */
+  .stats{
+    display:flex; gap:0; margin-top:16px;
+    border:1px solid var(--line);
+  }
+  .stat{
+    flex:1; padding:10px 14px; border-right:1px solid var(--line);
+  }
+  .stat:last-child{border-right:none;}
+  .stat .k{font-size:10px; color:var(--text-dimmer); letter-spacing:0.08em; text-transform:uppercase;}
+  .stat .v{font-size:16px; font-weight:700; margin-top:2px;}
+  .v.buy{color:var(--buy);}
+  .v.sell{color:var(--sell);}
+  .v.hold{color:var(--hold);}
+
+  /* ---- dropzone ---- */
+  .dropzone{
+    display:block;
+    margin-top:20px;
+    border:1px dashed var(--line-bright);
+    padding:28px 16px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    position:relative;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--amber-dim);
+    background:rgba(255,159,10,0.03);
+  }
+  .dropzone .icon{font-size:20px; color:var(--text-dim); margin-bottom:8px;}
+  .dropzone .main{color:var(--text); font-size:13px;}
+  .dropzone .sub{color:var(--text-dimmer); font-size:11px; margin-top:6px;}
+  .dropzone input{display:none;}
+
+  /* ---- feed ---- */
+  .feed{margin-top:28px; display:flex; flex-direction:column; gap:14px;}
+  .feed-label{
+    font-size:10px; color:var(--text-dimmer); letter-spacing:0.1em; text-transform:uppercase;
+    display:flex; align-items:center; gap:10px; margin-bottom:2px;
+  }
+  .feed-label::after{content:''; flex:1; height:1px; background:var(--line);}
+
+  .entry{
+    border:1px solid var(--line);
+    background:var(--panel);
+    animation:slideIn .25s ease-out;
+  }
+  @keyframes slideIn{ from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);} }
+
+  .entry-head{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .entry-head img{
+    width:44px; height:32px; object-fit:cover; border:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .entry-meta{flex:1; min-width:0;}
+  .entry-ts{color:var(--text-dimmer); font-size:10px;}
+  .entry-pair{color:var(--text); font-size:13px; font-weight:700; margin-top:1px;}
+  .badge{
+    font-size:10px; font-weight:700; letter-spacing:0.06em;
+    padding:4px 8px; border:1px solid; flex-shrink:0;
+  }
+  .badge.BUY{color:var(--buy); border-color:var(--buy-dim); background:rgba(0,217,100,0.06);}
+  .badge.SELL{color:var(--sell); border-color:var(--sell-dim); background:rgba(255,59,48,0.06);}
+  .badge.HOLD{color:var(--hold); border-color:var(--line-bright); background:rgba(255,255,255,0.02);}
+  .chev{color:var(--text-dimmer); font-size:11px; transition:transform .15s; flex-shrink:0;}
+  .entry.open .chev{transform:rotate(90deg);}
+
+  .entry-body{
+    display:none;
+    padding:14px 12px 16px;
+  }
+  .entry.open .entry-body{display:block;}
+
+  .rowline{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.03);
+    font-size:12px;
+  }
+  .rowline .k{color:var(--text-dimmer);}
+  .rowline .v{color:var(--text); font-weight:600;}
+  .rowline .v.buy{color:var(--buy);} .rowline .v.sell{color:var(--sell);}
+
+  .price-points{
+    border:1px solid var(--line); background:var(--panel-2);
+    padding:10px 12px; margin-bottom:12px;
+  }
+  .price-points .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px;}
+  .pp-row{display:flex; align-items:baseline; gap:10px; padding:3px 0; font-size:12px;}
+  .pp-label{
+    width:66px; flex-shrink:0; font-size:10px; letter-spacing:0.04em; text-transform:uppercase; font-weight:700;
+  }
+  .pp-label.sell{color:var(--sell);}
+  .pp-label.buy{color:var(--buy);}
+  .pp-val{color:var(--text); font-weight:600;}
+  .pp-structure{
+    margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.04);
+    color:var(--text-dim); font-size:11px; font-style:italic; line-height:1.5;
+  }
+  .step2-label{margin-bottom:8px !important;}
+
+  .reasoning{margin-top:12px;}
+  .reasoning .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;}
+  .reasoning ul{list-style:none;}
+  .reasoning li{
+    color:var(--text); font-size:12px; padding-left:14px; position:relative; margin-bottom:6px; line-height:1.5;
+  }
+  .reasoning li::before{content:'▸'; position:absolute; left:0; color:var(--amber-dim);}
+
+  .loading .entry-head{cursor:default;}
+  .loading .entry-pair{color:var(--text-dim);}
+  .loading-dots::after{
+    content:''; animation:dots 1.2s steps(4,end) infinite;
+  }
+  @keyframes dots{ 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} }
+
+  .error-entry{
+    border:1px solid var(--sell-dim); background:rgba(255,59,48,0.04);
+    padding:10px 12px; font-size:12px; color:var(--sell);
+  }
+
+  /* ---- discuss box ---- */
+  .discuss{
+    margin-top:16px; padding-top:14px; border-top:1px solid var(--line);
+  }
+  .discuss .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:9px;}
+
+  .conf-picker{display:flex; gap:6px; margin-bottom:8px;}
+  .conf-chip{
+    flex:1; text-align:center; padding:6px 4px; font-size:10px; font-weight:700; letter-spacing:0.04em;
+    border:1px solid var(--line-bright); background:none; color:var(--text-dim);
+    font-family:inherit; cursor:pointer; text-transform:uppercase;
+  }
+  .conf-chip:hover{border-color:var(--amber-dim); color:var(--text);}
+  .conf-chip.active{border-color:var(--amber); color:var(--amber); background:rgba(255,159,10,0.06);}
+
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .chip{
+    font-size:11px; padding:5px 10px; border:1px solid var(--line-bright); background:none;
+    color:var(--text-dim); font-family:inherit; cursor:pointer;
+  }
+  .chip:hover{border-color:var(--amber-dim); color:var(--text);}
+
+  .thread{display:flex; flex-direction:column; gap:10px; margin-bottom:10px;}
+  .msg{font-size:12px; line-height:1.55;}
+  .msg .who{font-size:10px; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:3px;}
+  .msg.user .who{color:var(--amber);}
+  .msg.assistant .who{color:var(--text-dimmer);}
+  .msg.user .txt{color:var(--text);}
+  .msg.assistant .txt{color:var(--text); padding-left:10px; border-left:2px solid var(--line);}
+  .msg.assistant .txt.error{color:var(--sell);}
+  .msg-loading .txt::after{content:''; animation:dots 1.2s steps(4,end) infinite;}
+
+  .composer{display:flex; gap:6px;}
+  .ask-input{
+    flex:1; background:var(--void); border:1px solid var(--line-bright); color:var(--text);
+    font-family:inherit; font-size:12px; padding:8px 10px; outline:none;
+  }
+  .ask-input:focus{border-color:var(--amber-dim);}
+  .ask-input::placeholder{color:var(--text-dimmer);}
+  .send-btn{
+    background:none; border:1px solid var(--line-bright); color:var(--amber);
+    font-family:inherit; font-size:11px; padding:8px 14px; cursor:pointer; letter-spacing:0.04em;
+  }
+  .send-btn:hover{border-color:var(--amber);}
+  .send-btn:disabled{opacity:0.4; cursor:default;}
+
+  /* ---- live price ticker ---- */
+  .ticker-box{
+    margin-top:16px; border:1px solid var(--line); background:var(--panel);
+    padding:12px;
+  }
+  .ticker-box .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:9px;}
+  .ticker-row{display:flex; gap:6px;}
+  .ticker-input{
+    flex:1; background:var(--void); border:1px solid var(--line-bright); color:var(--text);
+    font-family:inherit; font-size:12px; padding:9px 10px; outline:none; text-transform:uppercase;
+  }
+  .ticker-input:focus{border-color:var(--amber-dim);}
+  .ticker-input::placeholder{color:var(--text-dimmer); text-transform:none;}
+  .ticker-btn{
+    background:none; border:1px solid var(--amber-dim); color:var(--amber);
+    font-family:inherit; font-size:11px; padding:9px 14px; cursor:pointer; letter-spacing:0.04em; flex-shrink:0;
+  }
+  .ticker-btn:hover{border-color:var(--amber);}
+  .ticker-btn:disabled{opacity:0.4; cursor:default;}
+
+  .ticker-list{margin-top:10px; display:flex; flex-direction:column; gap:8px;}
+  .ticker-item{
+    display:flex; align-items:baseline; gap:10px; padding:8px 10px;
+    border:1px solid var(--line); font-size:12px; cursor:pointer;
+  }
+  .ticker-item:hover{border-color:var(--line-bright);}
+  .ticker-sym{color:var(--amber); font-weight:700; width:80px; flex-shrink:0;}
+  .ticker-price{color:var(--text); font-weight:600; flex-shrink:0;}
+  .ticker-change{font-size:11px; flex-shrink:0;}
+  .ticker-change.up{color:var(--buy);}
+  .ticker-change.down{color:var(--sell);}
+  .ticker-note{color:var(--text-dimmer); font-size:11px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ticker-time{color:var(--text-dimmer); font-size:10px; flex-shrink:0;}
+  .ticker-loading{color:var(--text-dim); font-size:11px; padding:8px 10px;}
+  .ticker-error{color:var(--sell); font-size:11px; padding:8px 10px; border:1px solid var(--sell-dim);}
+
+  /* ---- tradingview chart ---- */
+  .chart-box{
+    margin-top:16px; border:1px solid var(--line); background:var(--panel);
+    padding:12px;
+  }
+  .chart-box .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:9px;}
+  .chart-row{display:flex; gap:6px;}
+  .chart-input{
+    flex:1; background:var(--void); border:1px solid var(--line-bright); color:var(--text);
+    font-family:inherit; font-size:12px; padding:9px 10px; outline:none; text-transform:uppercase;
+  }
+  .chart-input:focus{border-color:var(--amber-dim);}
+  .chart-input::placeholder{color:var(--text-dimmer); text-transform:none;}
+  .chart-btn{
+    background:none; border:1px solid var(--amber-dim); color:var(--amber);
+    font-family:inherit; font-size:11px; padding:9px 14px; cursor:pointer; letter-spacing:0.04em; flex-shrink:0;
+  }
+  .chart-btn:hover{border-color:var(--amber);}
+  .chart-presets{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .chart-frame-wrap{
+    position:relative; width:100%; height:420px; margin-top:12px;
+    border:1px solid var(--line); background:var(--panel-2);
+  }
+  .chart-frame-wrap .cf-empty{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--text-dimmer); font-size:11px;
+  }
+  .chart-open{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:12px; padding:16px 14px; border:1px solid var(--amber-dim);
+    background:rgba(255,159,10,0.04); text-decoration:none; cursor:pointer;
+  }
+  .chart-open:hover{border-color:var(--amber); background:rgba(255,159,10,0.07);}
+  .chart-open .co-left{min-width:0;}
+  .chart-open .co-label{color:var(--text-dimmer); font-size:10px; letter-spacing:0.06em; text-transform:uppercase;}
+  .chart-open .co-symbol{color:var(--amber); font-size:16px; font-weight:700; margin-top:2px;}
+  .chart-open .co-arrow{color:var(--amber); font-size:20px; flex-shrink:0;}
+  .chart-hint{color:var(--text-dimmer); font-size:10px; margin-top:10px; line-height:1.5;}
+
+  /* ---- mobile ---- */
+  @media (max-width: 600px){
+    body{ padding-bottom:env(safe-area-inset-bottom); }
+    .wrap{ padding:calc(20px + env(safe-area-inset-top)) 14px 60px; }
+    h1{ font-size:22px; }
+    .ask-input, .ticker-input{ font-size:16px; } /* prevents iOS auto-zoom on focus */
+    .send-btn, .ticker-btn{ padding:11px 16px; min-height:44px; }
+    .chip, .conf-chip{ padding:9px 12px; min-height:38px; }
+    .entry-head{ padding:13px 12px; min-height:56px; }
+    .dropzone{ padding:34px 16px; }
+    .stat{ padding:10px 8px; }
+    .stat .v{ font-size:15px; }
+    .clear-btn{ padding:12px 16px; min-height:44px; }
+    .chart-open{ padding:18px 14px; }
+    .chart-frame-wrap{ height:300px; }
+  }
+
+  .empty{
+    color:var(--text-dimmer); font-size:12px; text-align:center; padding:30px 0;
+  }
+
+  .clear-btn{
+    display:block; margin:24px auto 0; background:none; border:1px solid var(--line);
+    color:var(--text-dimmer); font-family:inherit; font-size:11px; padding:8px 14px; cursor:pointer;
+  }
+  .clear-btn:hover{border-color:var(--sell-dim); color:var(--sell);}
+
+  body[data-theme="green"]{
+    --amber:#39ff88;
+    --amber-dim:#1f9954;
+  }
+
+  .top-controls{
+    display:flex; gap:6px; margin-top:14px;
+  }
+  .tc-btn{
+    background:none; border:1px solid var(--line-bright); color:var(--text-dim);
+    font-family:inherit; font-size:10px; padding:6px 10px; cursor:pointer; letter-spacing:0.04em;
+  }
+  .tc-btn:hover{border-color:var(--amber-dim); color:var(--text);}
+  .settings-panel{
+    display:none; margin-top:10px; border:1px solid var(--line); background:var(--panel);
+    padding:12px;
+  }
+  .settings-panel.open{display:block;}
+  .settings-panel .k{color:var(--text-dimmer); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px;}
+  .settings-row{display:flex; gap:6px;}
+  .settings-input{
+    flex:1; background:var(--void); border:1px solid var(--line-bright); color:var(--text);
+    font-family:inherit; font-size:11px; padding:8px 10px; outline:none;
+  }
+  .settings-input:focus{border-color:var(--amber-dim);}
+  .settings-save{
+    background:none; border:1px solid var(--amber-dim); color:var(--amber);
+    font-family:inherit; font-size:11px; padding:8px 12px; cursor:pointer;
+  }
+  .settings-note{color:var(--text-dimmer); font-size:10px; margin-top:8px; line-height:1.5;}
+  .settings-status{font-size:10px; margin-top:6px;}
+  .settings-status.ok{color:var(--buy);}
+  .settings-status.warn{color:var(--amber);}
+
+  ::selection{background:var(--amber-dim); color:#000;}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="wrap">
+
+  <header>
+    <div class="prompt-line"><span class="path">nassim@desk</span>:~/gold-desk$ <span class="cursor"></span></div>
+    <h1><span>chart</span>-desk</h1>
+    <div class="subtitle">drop a chart screenshot → get a signal call, logged.</div>
+    <div class="subtitle" style="margin-top:2px;">on your phone: open this link → browser menu → Add to Home Screen.</div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><div class="k">Calls</div><div class="v" id="statTotal">0</div></div>
+      <div class="stat"><div class="k">Buy</div><div class="v buy" id="statBuy">0</div></div>
+      <div class="stat"><div class="k">Sell</div><div class="v sell" id="statSell">0</div></div>
+      <div class="stat"><div class="k">Hold</div><div class="v hold" id="statHold">0</div></div>
+    </div>
+
+    <div class="top-controls">
+      <button class="tc-btn" id="themeBtn">theme: bright</button>
+      <button class="tc-btn" id="settingsBtn">⚙ api endpoint</button>
+    </div>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="k">API Endpoint</div>
+      <div class="settings-row">
+        <input type="text" id="endpointInput" class="settings-input" placeholder="https://api.anthropic.com/v1/messages">
+        <button class="settings-save" id="endpointSave">save</button>
+      </div>
+      <div class="settings-status" id="endpointStatus"></div>
+      <div class="settings-note">Leave empty if you're using this through Claude. For the standalone/APK version, paste your deployed proxy Worker URL here.</div>
+    </div>
+  </header>
+
+  <div class="chart-box">
+    <div class="k">Chart (TradingView)</div>
+    <div class="chart-row">
+      <input type="text" id="chartInput" class="chart-input" value="OANDA:XAUUSD" placeholder="OANDA:XAUUSD, BINANCE:BTCUSDT...">
+      <button class="chart-btn" id="chartBtn">set</button>
+    </div>
+    <div class="chart-presets" id="chartPresets">
+      <button class="chip" data-sym="OANDA:XAUUSD">XAUUSD</button>
+      <button class="chip" data-sym="BINANCE:BTCUSDT">BTCUSDT</button>
+      <button class="chip" data-sym="OANDA:EURUSD">EURUSD</button>
+      <button class="chip" data-sym="OANDA:US30USD">US30</button>
+    </div>
+    <div class="chart-frame-wrap" id="chartFrameWrap"><div class="cf-empty">loading chart…</div></div>
+    <a class="chart-open" id="chartOpenLink" href="https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD" target="_blank" rel="noopener">
+      <div class="co-left">
+        <div class="co-label">Chart not showing? Open in TradingView instead</div>
+        <div class="co-symbol" id="chartOpenSymbol">OANDA:XAUUSD</div>
+      </div>
+      <div class="co-arrow">↗</div>
+    </a>
+    <div class="chart-hint">viewer only — cross-origin, so it can't be auto-analyzed. Screenshot whatever you're looking at and drop it below for a signal call.</div>
+  </div>
+
+  <div class="ticker-box">
+    <div class="k">Live Price Check (web search)</div>
+    <div class="ticker-row">
+      <input type="text" id="tickerInput" class="ticker-input" placeholder="XAUUSD, BTCUSDT, EURUSD...">
+      <button class="ticker-btn" id="tickerBtn">check</button>
+    </div>
+    <div class="ticker-list" id="tickerList"></div>
+  </div>
+
+  <label class="dropzone" id="dropzone" for="fileInput">
+    <div class="icon">⎘</div>
+    <div class="main">tap to upload, drag a screenshot, or paste (⌘V)</div>
+    <div class="sub">chart image → signal + entry / SL / TP / confidence in seconds</div>
+    <input type="file" id="fileInput" accept="image/*">
+  </label>
+
+  <div class="feed" id="feed"></div>
+  <div class="empty" id="emptyMsg">no calls logged yet — upload a chart to start the session.</div>
+
+  <button class="clear-btn" id="clearBtn">clear log</button>
+
+</div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const feed = document.getElementById('feed');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const clearBtn = document.getElementById('clearBtn');
+  const STORAGE_KEY = 'chart-desk-log';
+
+  let history = []; // newest first
+  let openSet = new Set(); // ts of expanded entries
+  let tickerHistory = []; // newest first, live price checks
+  const TICKER_KEY = 'chart-desk-ticker';
+  const THEME_KEY = 'chart-desk-theme';
+  const ENDPOINT_KEY = 'chart-desk-api-endpoint';
+  const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+  function getEndpoint(){
+    try{ return localStorage.getItem(ENDPOINT_KEY) || DEFAULT_ENDPOINT; }
+    catch(e){ return DEFAULT_ENDPOINT; }
+  }
+
+  // ---------- storage (works inside Claude.ai via window.storage, ----------
+  // ---------- falls back to localStorage for standalone use) -------------
+  const kv = {
+    async get(key){
+      if(typeof window.storage !== 'undefined'){
+        try{ return await window.storage.get(key); }catch(e){ /* fall through */ }
+      }
+      try{
+        const v = localStorage.getItem(key);
+        return v !== null ? { key, value: v } : null;
+      }catch(e){ return null; }
+    },
+    async set(key, value){
+      if(typeof window.storage !== 'undefined'){
+        try{ return await window.storage.set(key, value); }catch(e){ /* fall through */ }
+      }
+      try{
+        localStorage.setItem(key, value);
+        return { key, value };
+      }catch(e){ return null; }
+    }
+  };
+
+  // ---------- storage ----------
+  async function loadHistory(){
+    try{
+      const res = await kv.get(STORAGE_KEY);
+      if(res && res.value){
+        history = JSON.parse(res.value);
+      }
+    }catch(e){ /* no saved log yet */ }
+    try{
+      const res2 = await kv.get(TICKER_KEY);
+      if(res2 && res2.value){
+        tickerHistory = JSON.parse(res2.value);
+      }
+    }catch(e){ /* no saved ticker yet */ }
+    render();
+    renderTicker();
+  }
+  async function saveHistory(){
+    try{
+      await kv.set(STORAGE_KEY, JSON.stringify(history));
+    }catch(e){ console.error('storage save failed', e); }
+  }
+  async function saveTicker(){
+    try{
+      await kv.set(TICKER_KEY, JSON.stringify(tickerHistory));
+    }catch(e){ console.error('ticker storage save failed', e); }
+  }
+
+  // ---------- image helpers ----------
+  function extractJSON(text){
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if(start === -1 || end === -1 || end < start) throw new Error('no JSON found in response');
+    return JSON.parse(text.slice(start, end + 1));
+  }
+  function allTextBlocks(data){
+    return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  }
+  function resizeImage(file, maxWidth){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxWidth / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ---------- API call ----------
+  async function analyzeImage(dataUrlForApi){
+    const base64 = dataUrlForApi.split(',')[1];
+    const systemPrompt = `You are a veteran quantitative trader with 20 years of experience reading price charts. You will be shown a screenshot of a trading chart (candlesticks, price axis, timeframe, sometimes indicators).
+
+Work in two explicit steps, in this order:
+
+STEP 1 — PRICE POINT STRATEGY (do this first, before deciding anything directional):
+Map the chart's actual structure. Identify the nearest resistance level(s) above price and nearest support level(s) below price from visible swing highs/lows, ranges, or supply/demand shelves. Note where current price sits relative to that range (e.g. "mid-range", "pressing into resistance", "just bounced off support"), and describe the recent structure in one short line (e.g. "range-bound 4300-4360 for 18h" or "impulsive breakout above prior range high").
+
+STEP 2 — SIGNAL:
+Only after mapping the levels in Step 1, derive the trading call strictly from that structure plus visible candle momentum and any visible indicators (EMAs, RSI, MACD, etc.). Be decisive. Never say "it depends" and never refuse to call a direction. Entry, stop loss, and take profit must be consistent with the support/resistance levels identified in Step 1 (e.g. stop beyond the level that invalidates the trade, target at the next level).
+
+Reply with ONLY valid JSON, no markdown fences, no commentary before or after. Match this exact schema:
+{"pair":"string (instrument name/ticker as shown, or best guess)","timeframe":"string (e.g. 1H, 4H, Daily, as shown on chart)","current_price":"string","price_points":{"resistance":["level 1","level 2"],"support":["level 1","level 2"],"structure":"one short line describing current structure/position within the range"},"signal":"BUY or SELL or HOLD","entry":"string price level","stop_loss":"string price level","take_profit":"string price level","confidence":"High or Medium or Low","reasoning":["bullet 1","bullet 2","bullet 3"]}
+
+resistance and support arrays should have 1-2 levels each, ordered nearest-to-price first. Reasoning bullets must reference concrete things visible in the chart, including the price points from Step 1. Keep each bullet under 25 words.
+
+You have web search available. If it would sharpen the call — confirming today's actual live price, a scheduled news/data event, or macro context that could move this instrument imminently — search for it before finalizing. Don't search for things already obvious from the chart itself.`;
+
+    const response = await fetch(getEndpoint(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1500,
+        system: systemPrompt,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+            { type: "text", text: "Analyze this chart screenshot and give me the trading signal now." }
+          ]
+        }]
+      })
+    });
+
+    if(!response.ok){
+      let detail = '';
+      try{ detail = (await response.text()).slice(0, 300); }catch(e){}
+      throw new Error(`API error ${response.status}${detail ? ': ' + detail : ''}`);
+    }
+    const data = await response.json();
+    const allText = allTextBlocks(data);
+    if(!allText) throw new Error('no text in response');
+    return extractJSON(allText);
+  }
+
+  // ---------- discussion (ask / reply) ----------
+  function buildDiscussMessages(item){
+    const contextText = `You already analyzed this chart with this result: ${JSON.stringify(item.result)}. The trader is now asking follow-up questions about this specific setup. Answer directly and decisively in plain text — no JSON, no markdown headers, no bullet lists unless truly helpful. Keep it to 2-5 sentences unless more detail is genuinely needed. Stay consistent with your original call unless the follow-up genuinely changes your read, in which case say so explicitly.`;
+    const turns = (item.discussion || []).filter(m => !m.loading);
+    const msgs = [];
+    turns.forEach((turn, i) => {
+      if(turn.role === 'user'){
+        if(i === 0){
+          msgs.push({ role:'user', content:[
+            { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: item.thumb.split(',')[1] } },
+            { type:'text', text: contextText + '\n\nQuestion: ' + turn.text }
+          ]});
+        } else {
+          msgs.push({ role:'user', content: turn.text });
+        }
+      } else {
+        msgs.push({ role:'assistant', content: turn.text });
+      }
+    });
+    return msgs;
+  }
+
+  async function callDiscussAPI(messages){
+    const response = await fetch(getEndpoint(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 700,
+        system: "You are the same veteran quant trader who called this signal. Be direct, concise, and specific to this chart. You have web search available — use it if the question needs current price, news, or macro context you can't get from the chart alone.",
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages
+      })
+    });
+    if(!response.ok){
+      let detail = '';
+      try{ detail = (await response.text()).slice(0, 300); }catch(e){}
+      throw new Error(`API error ${response.status}${detail ? ': ' + detail : ''}`);
+    }
+    const data = await response.json();
+    const allText = allTextBlocks(data);
+    if(!allText) throw new Error('no text in response');
+    return allText.trim();
+  }
+
+  async function sendQuestion(id, questionText){
+    questionText = (questionText || '').trim();
+    if(!questionText) return;
+    const item = history.find(h => h.ts === id);
+    if(!item) return;
+    if(!item.discussion) item.discussion = [];
+    item.discussion.push({ role:'user', text: questionText });
+    item.discussion.push({ role:'assistant', text:'', loading:true });
+    openSet.add(id);
+    render();
+
+    try{
+      const messages = buildDiscussMessages(item);
+      const reply = await callDiscussAPI(messages);
+      item.discussion[item.discussion.length - 1] = { role:'assistant', text: reply };
+    }catch(e){
+      item.discussion[item.discussion.length - 1] = { role:'assistant', text: e.message || 'failed to get reply', error:true };
+    }
+    render();
+    saveHistory();
+  }
+
+  // ---------- tradingview live chart ----------
+  const CRYPTO_BASES = ['BTC','ETH','SOL','XRP','DOGE','BNB','ADA','LTC','LINK','AVAX','MATIC','DOT','TRX','TON','SHIB','UNI','ATOM'];
+  const INDEX_SYMBOLS = ['US30USD','US30','SPX500USD','NAS100USD','UK100GBP','DE40EUR','JP225USD'];
+
+  function guessTVSymbol(raw){
+    let s = (raw || '').trim().toUpperCase();
+    if(!s) return 'OANDA:XAUUSD';
+    if(s.includes(':')) return s; // user gave EXCHANGE:SYMBOL explicitly
+    if(CRYPTO_BASES.some(b => s.startsWith(b)) && (s.endsWith('USDT') || s.endsWith('BUSD') || s.endsWith('USDC'))){
+      return `BINANCE:${s}`;
+    }
+    if(INDEX_SYMBOLS.includes(s)){
+      return `OANDA:${s.endsWith('USD') || s.endsWith('EUR') || s.endsWith('GBP') ? s : s + 'USD'}`;
+    }
+    // default: forex pairs, metals (XAUUSD/XAGUSD), and anything else -> OANDA
+    return `OANDA:${s}`;
+  }
+
+  function loadChart(rawSymbol){
+    const symbol = guessTVSymbol(rawSymbol);
+
+    // build the embedded TradingView widget (works on a real hosted https:// domain;
+    // blocked inside Claude's own preview pane or a locally-opened file — that's expected)
+    const wrap = document.getElementById('chartFrameWrap');
+    wrap.innerHTML = `<div class="tradingview-widget-container" style="height:100%;width:100%">
+      <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+    </div>`;
+    const container = wrap.querySelector('.tradingview-widget-container');
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.text = JSON.stringify({
+      autosize: true,
+      symbol: symbol,
+      interval: "60",
+      timezone: "Etc/UTC",
+      theme: "dark",
+      style: "1",
+      locale: "en",
+      allow_symbol_change: true,
+      support_host: "https://www.tradingview.com",
+      backgroundColor: "#0a0a0a",
+      gridColor: "rgba(255,255,255,0.06)"
+    });
+    container.appendChild(script);
+
+    // keep the fallback "open in TradingView" link in sync regardless
+    const link = document.getElementById('chartOpenLink');
+    link.href = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(symbol);
+    document.getElementById('chartOpenSymbol').textContent = symbol;
+    document.getElementById('chartInput').value = symbol;
+  }
+  async function checkPrice(symbolRaw){
+    const symbol = (symbolRaw || '').trim().toUpperCase();
+    if(!symbol) return;
+
+    const entry = { ts: new Date().toISOString(), symbol, status:'loading' };
+    tickerHistory.unshift(entry);
+    tickerHistory = tickerHistory.slice(0, 8);
+    renderTicker();
+
+    try{
+      const response = await fetch(getEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 600,
+          system: `You are a market data lookup assistant. Use web search to find the current live price of the given trading instrument. Reply with ONLY valid JSON, no markdown, no commentary: {"symbol":"string as given","price":"string with current price","change":"string like +1.2% or -0.4%, today's session change if available, else empty string","direction":"up or down or flat","note":"one short line of context, under 15 words (e.g. session driver, key level)","as_of":"string, short human time reference for when this price is from"}`,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{ role:"user", content: `Look up the current live price for: ${symbol}` }]
+        })
+      });
+      if(!response.ok){
+        let detail = '';
+        try{ detail = (await response.text()).slice(0, 300); }catch(e){}
+        throw new Error(`API error ${response.status}${detail ? ': ' + detail : ''}`);
+      }
+      const data = await response.json();
+      const allText = allTextBlocks(data);
+      if(!allText) throw new Error('no text in response');
+      const parsed = extractJSON(allText);
+      entry.status = 'done';
+      entry.result = parsed;
+    }catch(e){
+      entry.status = 'error';
+      entry.error = e.message || 'lookup failed';
+    }
+    renderTicker();
+    saveTicker();
+  }
+
+  function renderTicker(){
+    const list = document.getElementById('tickerList');
+    list.innerHTML = '';
+    tickerHistory.forEach(item => {
+      const el = document.createElement('div');
+      if(item.status === 'loading'){
+        el.className = 'ticker-loading';
+        el.textContent = `checking ${item.symbol}...`;
+        list.appendChild(el);
+        return;
+      }
+      if(item.status === 'error'){
+        el.className = 'ticker-error';
+        el.textContent = `${item.symbol} — ${item.error}`;
+        list.appendChild(el);
+        return;
+      }
+      const r = item.result;
+      const dir = (r.direction || 'flat').toLowerCase();
+      el.className = 'ticker-item';
+      el.dataset.symbol = item.symbol;
+      el.innerHTML = `
+        <span class="ticker-sym">${escapeHtml(item.symbol)}</span>
+        <span class="ticker-price">${escapeHtml(r.price)}</span>
+        <span class="ticker-change ${dir === 'up' ? 'up' : (dir === 'down' ? 'down' : '')}">${escapeHtml(r.change || '')}</span>
+        <span class="ticker-note">${escapeHtml(r.note || '')}</span>
+        <span class="ticker-time">${fmtTime(item.ts)}</span>`;
+      list.appendChild(el);
+    });
+  }
+
+  // ---------- render ----------
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function fmtTime(iso){
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+
+  function updateStats(){
+    document.getElementById('statTotal').textContent = history.length;
+    document.getElementById('statBuy').textContent = history.filter(h => h.result && h.result.signal === 'BUY').length;
+    document.getElementById('statSell').textContent = history.filter(h => h.result && h.result.signal === 'SELL').length;
+    document.getElementById('statHold').textContent = history.filter(h => h.result && h.result.signal === 'HOLD').length;
+  }
+
+  function render(){
+    feed.innerHTML = '';
+    emptyMsg.style.display = history.length ? 'none' : 'block';
+    updateStats();
+
+    history.forEach((item, idx) => {
+      const el = document.createElement('div');
+
+      if(item.status === 'loading'){
+        el.className = 'entry loading';
+        el.innerHTML = `
+          <div class="entry-head">
+            <img src="${item.thumb}">
+            <div class="entry-meta">
+              <div class="entry-ts">${fmtTime(item.ts)}</div>
+              <div class="entry-pair">reading chart<span class="loading-dots"></span></div>
+            </div>
+          </div>`;
+        feed.appendChild(el);
+        return;
+      }
+
+      if(item.status === 'error'){
+        el.className = 'error-entry';
+        el.textContent = `[${fmtTime(item.ts)}] analysis failed — ${item.error}`;
+        feed.appendChild(el);
+        return;
+      }
+
+      const r = item.result;
+      const sig = (r.signal || 'HOLD').toUpperCase();
+      const curConf = (r.confidence || 'Medium');
+      el.className = 'entry' + (openSet.has(item.ts) ? ' open' : '');
+      el.dataset.id = item.ts;
+      el.innerHTML = `
+        <div class="entry-head" data-id="${item.ts}">
+          <img src="${item.thumb}">
+          <div class="entry-meta">
+            <div class="entry-ts">${fmtTime(item.ts)} · ${escapeHtml(r.timeframe || '—')}</div>
+            <div class="entry-pair">${escapeHtml(r.pair || 'Unknown pair')}</div>
+          </div>
+          <div class="badge ${sig}">${sig}</div>
+          <div class="chev">›</div>
+        </div>
+        <div class="entry-body">
+          ${r.price_points ? `
+          <div class="price-points">
+            <div class="k">Step 1 — Price Point Strategy</div>
+            <div class="pp-row"><span class="pp-label sell">Resistance</span><span class="pp-val">${(r.price_points.resistance || []).map(escapeHtml).join(' / ')}</span></div>
+            <div class="pp-row"><span class="pp-label buy">Support</span><span class="pp-val">${(r.price_points.support || []).map(escapeHtml).join(' / ')}</span></div>
+            ${r.price_points.structure ? `<div class="pp-structure">${escapeHtml(r.price_points.structure)}</div>` : ''}
+          </div>
+          <div class="k step2-label">Step 2 — Signal</div>
+          ` : ''}
+          <div class="rowline"><span class="k">Current Price</span><span class="v">${escapeHtml(r.current_price)}</span></div>
+          <div class="rowline"><span class="k">Entry</span><span class="v">${escapeHtml(r.entry)}</span></div>
+          <div class="rowline"><span class="k">Stop Loss</span><span class="v sell">${escapeHtml(r.stop_loss)}</span></div>
+          <div class="rowline"><span class="k">Take Profit</span><span class="v buy">${escapeHtml(r.take_profit)}</span></div>
+          <div class="rowline"><span class="k">Confidence</span><span class="v">${escapeHtml(curConf)}</span></div>
+          <div class="reasoning">
+            <div class="k">Reasoning</div>
+            <ul>${(r.reasoning || []).map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>
+          </div>
+
+          <div class="discuss">
+            <div class="k">Discuss this call</div>
+            <div class="conf-picker">
+              ${['Low','Medium','High'].map(lvl => `
+                <button class="conf-chip${lvl === curConf ? ' active' : ''}" data-id="${item.ts}" data-q="${lvl === curConf ? `Walk me through exactly why this is ${lvl} confidence.` : `What would need to change for this to be ${lvl} confidence instead of ${curConf}?`}">${lvl}</button>
+              `).join('')}
+            </div>
+            <div class="chips">
+              <button class="chip" data-id="${item.ts}" data-q="What invalidates this call?">what invalidates this?</button>
+              <button class="chip" data-id="${item.ts}" data-q="What's the alternate scenario if I'm wrong?">alternate scenario?</button>
+              <button class="chip" data-id="${item.ts}" data-q="How would you tighten the stop loss here?">tighten the stop?</button>
+            </div>
+            <div class="thread">
+              ${(item.discussion || []).map(m => `
+                <div class="msg ${m.role}${m.loading ? ' msg-loading' : ''}">
+                  <div class="who">${m.role === 'user' ? 'you' : 'desk'}</div>
+                  <div class="txt${m.error ? ' error' : ''}">${escapeHtml(m.text)}</div>
+                </div>
+              `).join('')}
+            </div>
+            <div class="composer">
+              <input class="ask-input" data-id="${item.ts}" placeholder="ask about this call...">
+              <button class="send-btn" data-id="${item.ts}">send</button>
+            </div>
+          </div>
+        </div>`;
+      feed.appendChild(el);
+    });
+  }
+
+  // ---------- handle a new file ----------
+  async function handleFile(file){
+    if(!file || !file.type.startsWith('image/')) return;
+
+    const [apiImg, thumb] = await Promise.all([
+      resizeImage(file, 1200),
+      resizeImage(file, 160)
+    ]);
+
+    const entry = { ts: new Date().toISOString(), status: 'loading', thumb };
+    history.unshift(entry);
+    render();
+
+    try{
+      const result = await analyzeImage(apiImg);
+      entry.status = 'done';
+      entry.result = result;
+    }catch(e){
+      entry.status = 'error';
+      entry.error = e.message || 'unknown error';
+    }
+    render();
+    saveHistory();
+
+    // auto-open the freshest completed entry
+    if(entry.status === 'done'){
+      openSet.add(entry.ts);
+      render();
+    }
+  }
+
+  // ---------- wiring ----------
+  feed.addEventListener('click', (e) => {
+    const head = e.target.closest('.entry-head');
+    if(head){
+      const id = head.dataset.id;
+      if(openSet.has(id)) openSet.delete(id); else openSet.add(id);
+      head.closest('.entry').classList.toggle('open');
+      return;
+    }
+    const chip = e.target.closest('.chip, .conf-chip');
+    if(chip){
+      sendQuestion(chip.dataset.id, chip.dataset.q);
+      return;
+    }
+    const sendBtn = e.target.closest('.send-btn');
+    if(sendBtn){
+      const input = feed.querySelector(`.ask-input[data-id="${sendBtn.dataset.id}"]`);
+      if(input){ sendQuestion(sendBtn.dataset.id, input.value); input.value = ''; }
+      return;
+    }
+  });
+
+  feed.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && e.target.classList.contains('ask-input')){
+      sendQuestion(e.target.dataset.id, e.target.value);
+      e.target.value = '';
+    }
+  });
+
+  // dropzone is a <label for="fileInput">, so tapping it opens the picker natively — no JS needed here.
+
+  const chartInput = document.getElementById('chartInput');
+  const chartBtn = document.getElementById('chartBtn');
+  chartBtn.addEventListener('click', () => loadChart(chartInput.value));
+  chartInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') loadChart(chartInput.value);
+  });
+  document.getElementById('chartPresets').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if(chip) loadChart(chip.dataset.sym);
+  });
+  loadChart('OANDA:XAUUSD');
+
+  const tickerInput = document.getElementById('tickerInput');
+  const tickerBtn = document.getElementById('tickerBtn');
+  tickerBtn.addEventListener('click', () => {
+    const v = tickerInput.value;
+    tickerInput.value = '';
+    checkPrice(v);
+  });
+  tickerInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){
+      const v = tickerInput.value;
+      tickerInput.value = '';
+      checkPrice(v);
+    }
+  });
+  document.getElementById('tickerList').addEventListener('click', (e) => {
+    const item = e.target.closest('.ticker-item');
+    if(item) checkPrice(item.dataset.symbol);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if(e.target.files[0]) handleFile(e.target.files[0]);
+    fileInput.value = '';
+  });
+
+  ['dragover','dragenter'].forEach(evt => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    if(file) handleFile(file);
+  });
+
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    for(const item of items){
+      if(item.type.startsWith('image/')){
+        handleFile(item.getAsFile());
+        break;
+      }
+    }
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if(!confirm('Clear the entire call log? This cannot be undone.')) return;
+    history = [];
+    render();
+    saveHistory();
+  });
+
+  // ---------- theme toggle ----------
+  const themeBtn = document.getElementById('themeBtn');
+  const THEME_ORDER = ['bright', 'amber-dark', 'green'];
+  const THEME_LABELS = { bright: 'theme: bright', 'amber-dark': 'theme: amber', green: 'theme: phosphor' };
+  function applyTheme(t){
+    if(t === 'bright'){
+      document.body.removeAttribute('data-theme');
+    } else {
+      document.body.setAttribute('data-theme', t);
+    }
+    themeBtn.textContent = THEME_LABELS[t] || THEME_LABELS.bright;
+  }
+  (async () => {
+    let saved = 'bright';
+    try{ const r = await kv.get(THEME_KEY); if(r && r.value) saved = r.value; }catch(e){}
+    applyTheme(saved);
+  })();
+  themeBtn.addEventListener('click', async () => {
+    const current = document.body.getAttribute('data-theme') || 'bright';
+    const idx = THEME_ORDER.indexOf(current);
+    const next = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
+    applyTheme(next);
+    try{ await kv.set(THEME_KEY, next); }catch(e){}
+  });
+
+  // ---------- settings panel (API endpoint for standalone/APK use) ----------
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const endpointInput = document.getElementById('endpointInput');
+  const endpointSave = document.getElementById('endpointSave');
+  const endpointStatus = document.getElementById('endpointStatus');
+
+  function refreshEndpointStatus(){
+    const ep = getEndpoint();
+    if(ep === DEFAULT_ENDPOINT){
+      endpointStatus.textContent = 'using default — works when accessed through Claude';
+      endpointStatus.className = 'settings-status warn';
+    } else {
+      endpointStatus.textContent = `using custom proxy: ${ep}`;
+      endpointStatus.className = 'settings-status ok';
+    }
+  }
+  endpointInput.value = getEndpoint() === DEFAULT_ENDPOINT ? '' : getEndpoint();
+  refreshEndpointStatus();
+
+  settingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('open'));
+  endpointSave.addEventListener('click', () => {
+    const v = endpointInput.value.trim();
+    try{
+      if(v) localStorage.setItem(ENDPOINT_KEY, v);
+      else localStorage.removeItem(ENDPOINT_KEY);
+    }catch(e){}
+    refreshEndpointStatus();
+  });
+
+  loadHistory();
+})();
+</script>
+</body>
+</html>
